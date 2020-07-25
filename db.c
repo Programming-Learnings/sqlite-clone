@@ -235,6 +235,35 @@ Table *db_open(const char *filename)
     return table;
 }
 
+void db_close(Table *table)
+{
+    Pager *pager = table->pager;
+    uint32_t num_fulll_pages = table->num_rows / ROWS_PER_PAGE;
+
+    for (uint32_t i = 0; i < num_fulll_pages; i++)
+    {
+        if (pager->pages[i] == NULL)
+        {
+            continue;
+        }
+        pager_flush(pager, i, PAGE_SIZE);
+        free(pager->pages[i]);
+        pager->pages[i] = NULL;
+    }
+    +uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
+    +if (num_additional_rows > 0)
+    {
+        +uint32_t page_num = num_full_pages;
+        +if (pager->pages[page_num] != NULL)
+        {
+            +pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
+            +free(pager->pages[page_num]);
+            +pager->pages[page_num] = NULL;
+            +
+        }
+    }
+}
+
 void *get_page(Pager *pager, uint32_t page_num)
 {
     if (page_num > TABLE_MAX_PAGES)
