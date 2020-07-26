@@ -83,6 +83,27 @@ typedef struct
     Row row_to_insert;
 } Statement;
 
+void pager_flush(Pager *pager, uint32_t page_num, uint32_t size)
+{
+    if (pager->pages[page_num] == NULL)
+    {
+        printf("Page is null. Flush operation cancelled.\n");
+        exit(EXIT_FAILURE);
+    }
+    off_t offset = lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+    if (offset == -1)
+    {
+        printf("Error Seeking: %d\n", errno);
+        exit(EXIT_FAILURE);
+        ssize_t bytes_written = write(pager->file_descriptor, pager->pages[page_num], size);
+        if (bytes_written == -1)
+        {
+            printf("Error writing: %d\n", errno);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 MetaCommandResult do_meta_command(InputBuffer *input_buffer, Table *table)
 {
 
@@ -369,7 +390,16 @@ void close_input_buffer(InputBuffer *input_buffer)
 
 int main(int argc, char *argv[])
 {
-    Table *table = new_table();
+
+    if (argc < 2)
+    {
+        printf("Must provide a database filename. \n");
+        exit(EXIT_FAILURE);
+    }
+
+    char *filename = argv[1];
+    Table *table = db_open(filename);
+
     InputBuffer *input_buffer = new_input_buffer();
     while (true)
     {
@@ -380,46 +410,46 @@ int main(int argc, char *argv[])
             close_input_buffer(input_buffer);
             if (input_buffer->buffer[0] == '.')
             {
-                switch (do_meta_command(input_buffer))
+                switch (do_meta_command(input_buffer, table))
                 {
+
                 case (META_COMMAND_SUCCESS):
                     continue;
                 case (META_COMMAND_UNRECOGNIZED_COMMAND):
                     printf("Unrecognized command '%s'\n", input_buffer->buffer);
                     continue;
                 }
-            }
 
-            Statement statement;
-            switch (prepare_statement(input_buffer, &statement))
-            {
-            case (PREPARE_SUCCESS):
-                break;
-            case (PREPARE_NEGATIVE_ID):
-                printf("ID must be positive.\n");
-                continue;
+                Statement statement;
+                switch (prepare_statement(input_buffer, &statement))
+                {
+                case (PREPARE_SUCCESS):
+                    break;
+                case (PREPARE_NEGATIVE_ID):
+                    printf("ID must be positive.\n");
+                    continue;
 
-            case (PREPARE_STRING_TOO_LONG):
-                printf("String is too long.\n");
-                continue;
+                case (PREPARE_STRING_TOO_LONG):
+                    printf("String is too long.\n");
+                    continue;
 
-            case (PREPARE_SYNTAX_ERROR):
-                printf("Syntax error. Could not parse  statement\n");
-                continue;
-            case (PREPARE_UNRECOGNIZED_STATEMENT):
-                printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
-                continue;
-            }
+                case (PREPARE_SYNTAX_ERROR):
+                    printf("Syntax error. Could not parse  statement\n");
+                    continue;
+                case (PREPARE_UNRECOGNIZED_STATEMENT):
+                    printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
+                    continue;
+                }
 
-            switch (execute_statement(&statement, table))
-            {
-            case (EXECUTE_SUCCESS):
-                printf("Executed.\n");
-                break;
-            case (EXECUTE_TABLE_FULL):
-                printf("Error: Table full.\n");
-                break;
+                switch (execute_statement(&statement, table))
+                {
+                case (EXECUTE_SUCCESS):
+                    printf("Executed.\n");
+                    break;
+                case (EXECUTE_TABLE_FULL):
+                    printf("Error: Table full.\n");
+                    break;
+                }
             }
         }
     }
-}
