@@ -83,6 +83,31 @@ typedef struct
     Row row_to_insert;
 } Statement;
 
+typedef struct
+{
+    Table *table;
+    uint32_t row_num;
+    bool end_of_table;
+} Cursor;
+
+Cursor *table_start(Table *table)
+{
+    Cursor *cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->row_num = 0;
+    cursor->end_of_table = (table->num_rows == 0);
+    return cursor;
+}
+
+Cursor *table_end(Table *table)
+{
+    Cursor *cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->row_num = table->num_rows;
+    cursor->end_of_table = true;
+    return cursor;
+}
+
 void pager_flush(Pager *pager, uint32_t page_num, uint32_t size)
 {
     if (pager->pages[page_num] == NULL)
