@@ -224,8 +224,14 @@ MetaCommandResult do_meta_command(InputBuffer *input_buffer, Table *table)
             return EXECUTE_TABLE_FULL;
         }
         Row *row_to_insert = &(statement->row_to_insert);
-        serialize_row(row_to_insert, row_slot(table, table->num_rows));
+        Cursor *cursor = table_end(table);
+
+        serialize_row(row_to_insert, cursor_value(cursor));
+
         table->num_rows += 1;
+
+        free(cursor);
+
         return EXECUTE_SUCCESS;
     }
     ExecuteResult execute_select(Statement * statement, Table * table)
@@ -379,18 +385,27 @@ void free_table(Table *table)
 
 void print_prompt() { printf("db > "); }
 
-void *row_slot(Table *table, uint32_t row_num)
+void *cursor_value(Cursor *cursor)
 {
+    uint32_t row_num = cursor->row_num;
     uint32_t page_num = row_num / ROWS_PER_PAGE;
     void *page = table->pages[page_num];
     if (page == NULL)
     {
         page = table->pages[page_num] = malloc(PAGE_SIZE);
     }
-    void *page = get_page(table->pager, page_num);
+    void *page = get_page(cursor->table->pager, page_num);
     uint32_t row_offset = row_num % ROWS_PER_PAGE;
     uint32_t byte_offset = row_offset * ROW_SIZE;
     return page + byte_offset;
+}
+void cursor_advance(Cursor *cursor)
+{
+    cursor->row_num += 1;
+    if (cursor->row_num >= cursor->table->num_rows)
+    {
+        cursor->end_of_table = true;
+    }
 }
 
 void read_input(InputBuffer *input_buffer)
